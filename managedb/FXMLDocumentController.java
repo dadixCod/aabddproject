@@ -21,10 +21,7 @@ import javafx.stage.Stage;
 import static tools.myconnection.connecterDB;
 import tools.myfunction;
 
-/**
- *
- * @author Samer
- */
+
 public class FXMLDocumentController implements Initializable {
 
     private Label label;

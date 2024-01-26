@@ -1,8 +1,4 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
+
 package tools;
 
 import java.io.IOException;
@@ -22,10 +18,6 @@ import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import javafx.util.Duration;
 
-/**
- *
- * @author Samer
- */
 public class myfunction {
         public static Object loadWindow(URL loc, String title, Stage parentStage, String test) {
         Object controller = null;

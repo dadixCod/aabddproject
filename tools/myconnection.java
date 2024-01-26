@@ -5,18 +5,31 @@
  */
 package tools;
 
+import controllers.FirstWindowController;
+import static controllers.FirstWindowController.selectedTable;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.ObservableList;
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.Dialog;
+import javafx.scene.control.Label;
 import javafx.scene.control.TableColumn;
+import javafx.scene.control.TextField;
+import javafx.scene.layout.GridPane;
 
 import javafx.util.Callback;
 import static managedb.FXMLDocumentController.psw;
@@ -76,32 +89,6 @@ public class myconnection {
         }
         return cnx;
     }
-//    public static void fillTable(String table, TableView tv, int size) {
-//        try {
-//            data = FXCollections.observableArrayList();
-//            int r = -1;
-//            ResultSet rst = inst(table);
-//            while (rst.next()) {
-//                ObservableList row = FXCollections.observableArrayList();
-//                for (int i = 1; i <= size; ++i) {
-//                    row.add((Object) ("" + rst.getString(i)));
-//                }
-//                data.add((Object) row);
-//            }
-//            tv.setItems(data);
-//        } catch (SQLException ex) {
-//            
-//        }
-//    }
-//     public static void fillculms(TableColumn myclm, final int i) {
-//        myclm.setCellValueFactory((Callback) new Callback<TableColumn.CellDataFeatures<ObservableList, String>, ObservableValue<String>>() {
-//
-//            public ObservableValue<String> call(TableColumn.CellDataFeatures<ObservableList, String> param) {
-//                return new SimpleStringProperty(((ObservableList) param.getValue()).get(i).toString());
-//            }
-//        });
-//    }
-    
     public static ResultSet inst(String table) {
         try {
             if (cnx == null) {
@@ -116,26 +103,12 @@ public class myconnection {
         }
         return rst;
     }
- public static void fillculms(TableColumn myclm, final int i) {
-        myclm.setCellValueFactory((Callback) new Callback<TableColumn.CellDataFeatures<ObservableList, String>, ObservableValue<String>>() {
 
-            public ObservableValue<String> call(TableColumn.CellDataFeatures<ObservableList, String> param) {
-                return new SimpleStringProperty(((ObservableList) param.getValue()).get(i).toString());
-            }
-        });
-    }
     public static ResultSet queryTableData(String tableName) {
         
         try {
             PreparedStatement preparedStatement = cnx.prepareStatement("SELECT * FROM SYNM" + tableName);
             rst = preparedStatement.executeQuery();
-//            while (rst.next()) {
-//                for (int i = 1; i <= rst.getMetaData().getColumnCount(); i++) {
-//               System.out.print(rst.getString(i) + "\t");
-//               
-//                }
-////                System.out.println();  // Move to the next line for the next row
-//            }
         } catch (SQLException ex) {
             ex.printStackTrace();
         }
@@ -178,6 +151,164 @@ public class myconnection {
     }
     return false;
 }
+     public static void openUpdateDialog(Map<String, String> rowData) {
+        // Create a new dialog for updating
+        Dialog<Map<String, String>> dialog = new Dialog<>();
+        dialog.setTitle("Update Row");
+
+        // Create TextFields for each column in the selected row
+        TextField[] textFields = createTextFields(rowData);
+
+        // Add the TextFields to the dialog
+        GridPane gridPane = new GridPane();
+        gridPane.setHgap(10);
+        gridPane.setVgap(10);
+
+        for (int i = 0; i < textFields.length; i++) {
+            gridPane.add(new Label(rowData.keySet().toArray()[i].toString()), 0, i);
+            gridPane.add(textFields[i], 1, i);
+        }
+
+        dialog.getDialogPane().setContent(gridPane);
+
+        // Add buttons to the dialog
+        ButtonType updateButtonType = new ButtonType("Update", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().addAll(updateButtonType, ButtonType.CANCEL);
+
+        // Set the result converter
+        dialog.setResultConverter(buttonType -> {
+            if (buttonType == updateButtonType) {
+                Map<String, String> updatedData = new HashMap<>();
+                for (int j = 0; j < textFields.length; j++) {
+                    updatedData.put(rowData.keySet().toArray()[j].toString(), textFields[j].getText());
+                }
+                return updatedData;
+            }
+            return null;
+        });
+
+        // Show the dialog and handle the result
+        Optional<Map<String, String>> result = dialog.showAndWait();
+
+        result.ifPresent(updatedData -> {
+            performUpdateOperation(updatedData, rowData);
+        });
+    }
+
+    public static TextField[] createTextFields(Map<String, String> rowData) {
+        TextField[] textFields = new TextField[rowData.size()];
+        int i = 0;
+
+        for (Map.Entry<String, String> entry : rowData.entrySet()) {
+            TextField textField = new TextField(entry.getValue());
+            textFields[i] = textField;
+            i++;
+        }
+
+        return textFields;
+    }
+
+    public static void promptDeleteConfirmation(Map<String, String> rowData) {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Delete Confirmation");
+        alert.setHeaderText(null);
+        alert.setContentText("Are you sure you want to delete this row?");
+
+        Optional<ButtonType> result = alert.showAndWait();
+        if (result.isPresent() && result.get() == ButtonType.OK) {
+            performDeleteOperation(rowData);
+        }
+    }
+
+    public static String getPrimaryKeyColumn(String tableName) {
+        String primaryKeyColumn = "";
+
+        // Your logic to determine the primary key column based on the table name
+        // For demonstration purposes, assuming the primary key column is the first column
+        try {
+            Statement statement = myconnection.cnx.createStatement();
+            ResultSet resultSet = statement.executeQuery("SELECT * FROM SYNM" + tableName);
+            ResultSetMetaData metaData = resultSet.getMetaData();
+
+            // Assuming the primary key is the first column
+            primaryKeyColumn = metaData.getColumnName(1);
+
+            resultSet.close();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        return primaryKeyColumn;
+    }
+
+    public static void performUpdateOperation(Map<String, String> updatedData, Map<String, String> rowData) {
+        // Retrieve the selected table name from the global variable or pass it to this controller
+        String selectedTableName = FirstWindowController.selectedTable;
+        String primaryKeyColumn = getPrimaryKeyColumn(selectedTableName);
+
+        // Create the SQL UPDATE statement
+        StringBuilder updateQuery = new StringBuilder("UPDATE SYNM");
+        updateQuery.append(selectedTableName).append(" SET ");
+
+        // Append the updated values to the SET clause
+        for (Map.Entry<String, String> entry : updatedData.entrySet()) {
+            updateQuery.append(entry.getKey()).append(" = '").append(entry.getValue()).append("', ");
+        }
+
+        // Remove the trailing comma and space
+        if (updateQuery.length() > 2) {
+            updateQuery.setLength(updateQuery.length() - 2);
+        }
+
+        // Add the WHERE clause to identify the row to update
+        updateQuery.append(" WHERE ");
+
+        // Identify the primary key column (replace "ID" with your actual primary key column)
+        updateQuery.append(primaryKeyColumn).append(" = '").append(rowData.get(primaryKeyColumn)).append("'");
+
+        // Execute the UPDATE statement
+        try {
+            Statement statement = myconnection.cnx.createStatement();
+            int rowsUpdated = statement.executeUpdate(updateQuery.toString());
+
+            if (rowsUpdated > 0) {
+                System.out.println("Row updated successfully!");
+            } else {
+                System.out.println("No rows were updated.");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            System.err.println("Error updating row");
+        }
+    }
+
+    public static void performDeleteOperation(Map<String, String> rowData) {
+        String tableName = selectedTable;
+
+        // Create the SQL DELETE statement
+        StringBuilder deleteQuery = new StringBuilder("DELETE FROM SYNM");
+        deleteQuery.append(tableName).append(" WHERE ");
+
+        // Append values for the WHERE clause
+        for (Map.Entry<String, String> entry : rowData.entrySet()) {
+            deleteQuery.append(entry.getKey()).append(" = '").append(entry.getValue()).append("' AND ");
+        }
+
+        // Remove the trailing "AND"
+        if (deleteQuery.length() > 4) {
+            deleteQuery.setLength(deleteQuery.length() - 4);
+        }
+
+        // Execute the DELETE statement
+        try {
+            Statement statement = myconnection.cnx.createStatement();
+            statement.executeUpdate(deleteQuery.toString());
+            System.out.println("Row deleted successfully!");
+        } catch (SQLException e) {
+            e.printStackTrace();
+            System.err.println("Error deleting row");
+        }
+    }
 
 
     public static void closeResources() {

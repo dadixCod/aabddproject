@@ -1,0 +1,76 @@
+*{
+    -fx-primary :#4f2686;
+    -fx-secondary : #a4a4a4;
+    -fx-secondarytext :#000000 ;
+    -fx-primarytext : #FFFFFF;
+    -fx-blue:#012093;
+    -fx-red: #FF0000;
+    -fx-green:#2E7D32;
+    -fx-orange:#FF781F; 
+    -fx-firstgradient:#dcdcdc;
+    -fx-secondgradient:#e4e5f1;
+    -fx-third:#dc7a90;
+}
+.root{
+    -fx-background-color:-fx-firstgradient;
+}
+
+.button{
+    -fx-text-fill: -fx-primarytext;
+    -fx-background-color: -fx-primary;
+    -fx-border-color: -fx-secondary;
+    -fx-border-radius: 10px;
+    -fx-background-radius: 10px;
+    -fx-font-size: 14pt;
+    -fx-font-weight:bold;
+}
+
+.button:hover{
+    -fx-border-color: -fx-secondary;
+    -fx-background-color: -fx-secondary;
+    -fx-text-fill: -fx-primarytext;
+}
+.jfx-text-field{
+    -fx-text-fill: -fx-secondarytext;
+    -fx-font-size : 10pt;
+    -jfx-focus-color: -fx-secondarytext;
+    -jfx-unfocus-color: -fx-secondary;
+    -fx-prompt-text-fill: -fx-secondarytext;
+    -fx-background-color: -fx-secondary;
+    -fx-padding:5px;
+}
+/*Text Styling */
+.text-main{
+    -fx-fill:-fx-secondarytext;
+    -fx-font-size:20pt;
+    -fx-text-alignment: center;
+    -fx-font-weight:bold;
+}
+.usertext-main{
+    -fx-fill:-fx-primarytext;
+    -fx-font-size:20pt; 
+    -fx-text-alignment: center;
+    -fx-font-weight:bold;
+}
+.text-main2{
+    -fx-fill:-fx-secondarytext;
+    -fx-font-size:15pt;
+    -fx-text-alignment: center;
+}
+.userContainer{
+    -fx-background-color: -fx-primary;
+}
+
+.table-view {
+    -fx-table-header-border-color: transparent; /* Remove header border */
+}
+
+.table-view .column-header-background {
+    -fx-background-color: white; /* Set background color for header */
+     /* Adjust padding for header cells */
+}
+
+.table-view .column-header .label {
+    -fx-text-fill: -fx-secondarytext; /* Set text color for header cells */
+    -fx-font-weight: bold; /* Make header text bold */
+}

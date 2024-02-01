@@ -19,19 +19,16 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javafx.beans.property.SimpleStringProperty;
-import javafx.beans.value.ObservableValue;
 import javafx.collections.ObservableList;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
-import javafx.scene.control.TableColumn;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
 
-import javafx.util.Callback;
+import javafx.stage.Stage;
 import static managedb.FXMLDocumentController.psw;
 import static managedb.FXMLDocumentController.usn;
 
@@ -40,7 +37,8 @@ public class myconnection {
     public static Connection cnx;
     private static Statement st;
     public static ResultSet rst;
-    private static ObservableList<Object> data ;
+    private static ObservableList<Object> data;
+    private static UpdateDeleteCallback updateDeleteCallback;
 
     public static ResultSet instload2things(String nom, String password) {
         try {
@@ -59,6 +57,15 @@ public class myconnection {
             Logger.getLogger(myconnection.class.getName()).log(Level.SEVERE, "Error executing query", ex);
         }
         return rst;
+    }
+
+    public interface UpdateDeleteCallback {
+
+        void onSuccess();
+    }
+
+    public static void setUpdateDeleteCallback(UpdateDeleteCallback callback) {
+        updateDeleteCallback = callback;
     }
 
     public static ResultSet queryUserTables(String role) {
@@ -89,23 +96,23 @@ public class myconnection {
         }
         return cnx;
     }
+
     public static ResultSet inst(String table) {
         try {
             if (cnx == null) {
-                cnx = connecterDB(usn,psw);
+                cnx = connecterDB(usn, psw);
             }
             st = cnx.createStatement();
             rst = st.executeQuery("SELECT * FROM " + table);
         } catch (SQLException sQLException) {
             // empty catch block
-            
 
         }
         return rst;
     }
 
     public static ResultSet queryTableData(String tableName) {
-        
+
         try {
             PreparedStatement preparedStatement = cnx.prepareStatement("SELECT * FROM SYNM" + tableName);
             rst = preparedStatement.executeQuery();
@@ -114,6 +121,7 @@ public class myconnection {
         }
         return rst;
     }
+
     public static ResultSet queryTableMetadata(String tableName) {
         ResultSet resultSet = null;
         try {
@@ -127,31 +135,34 @@ public class myconnection {
         }
         return resultSet;
     }
-    public static boolean checkInsertPrivilege(String tableName) {
-    try {
-        if (cnx == null) {
-            cnx = connecterDB(usn, psw);
-        }
-        String query ="";
-        if(usn.equals("user1")){
-             query = "SELECT COUNT(*) FROM USER_TAB_PRIVS WHERE TABLE_NAME = '"+tableName+"' AND PRIVILEGE = 'INSERT'";
-        }else if(usn.equals("user2")){
-             query = "SELECT COUNT(*) FROM ROLE_TAB_PRIVS WHERE TABLE_NAME = '"+tableName+"' AND PRIVILEGE = 'INSERT'";
-        }
-        try (PreparedStatement preparedStatement = cnx.prepareStatement(query)) {
 
-            ResultSet resultSet = preparedStatement.executeQuery();
-            if (resultSet.next()) {
-                int count = resultSet.getInt(1);
-                return count > 0;
+    public static boolean checkPrivilege(String tableName,String privilege) {
+        try {
+            if (cnx == null) {
+                cnx = connecterDB(usn, psw);
             }
+            String query = "";
+            if (usn.equals("user1")) {
+                query = "SELECT COUNT(*) FROM USER_TAB_PRIVS WHERE TABLE_NAME = '" + tableName + "' AND PRIVILEGE = '"+privilege+"'";
+            } else if (usn.equals("user2")) {
+                query = "SELECT COUNT(*) FROM ROLE_TAB_PRIVS WHERE TABLE_NAME = '" + tableName + "' AND PRIVILEGE = '"+privilege+"'";
+            }
+            try (PreparedStatement preparedStatement = cnx.prepareStatement(query)) {
+
+                ResultSet resultSet = preparedStatement.executeQuery();
+                if (resultSet.next()) {
+                    int count = resultSet.getInt(1);
+                    return count > 0;
+                }
+            }
+        } catch (SQLException ex) {
+            ex.printStackTrace();
         }
-    } catch (SQLException ex) {
-        ex.printStackTrace();
+        return false;
     }
-    return false;
-}
-     public static void openUpdateDialog(Map<String, String> rowData) {
+    
+
+    public static void openUpdateDialog(Map<String, String> rowData) {
         // Create a new dialog for updating
         Dialog<Map<String, String>> dialog = new Dialog<>();
         dialog.setTitle("Update Row");
@@ -191,7 +202,7 @@ public class myconnection {
         Optional<Map<String, String>> result = dialog.showAndWait();
 
         result.ifPresent(updatedData -> {
-            performUpdateOperation(updatedData, rowData);
+            performUpdateOperation(updatedData, rowData, updateDeleteCallback);
         });
     }
 
@@ -209,6 +220,7 @@ public class myconnection {
     }
 
     public static void promptDeleteConfirmation(Map<String, String> rowData) {
+
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.setTitle("Delete Confirmation");
         alert.setHeaderText(null);
@@ -216,7 +228,7 @@ public class myconnection {
 
         Optional<ButtonType> result = alert.showAndWait();
         if (result.isPresent() && result.get() == ButtonType.OK) {
-            performDeleteOperation(rowData);
+            performDeleteOperation(rowData, updateDeleteCallback);
         }
     }
 
@@ -241,7 +253,7 @@ public class myconnection {
         return primaryKeyColumn;
     }
 
-    public static void performUpdateOperation(Map<String, String> updatedData, Map<String, String> rowData) {
+    public static void performUpdateOperation(Map<String, String> updatedData, Map<String, String> rowData, UpdateDeleteCallback callback) {
         // Retrieve the selected table name from the global variable or pass it to this controller
         String selectedTableName = FirstWindowController.selectedTable;
         String primaryKeyColumn = getPrimaryKeyColumn(selectedTableName);
@@ -252,7 +264,18 @@ public class myconnection {
 
         // Append the updated values to the SET clause
         for (Map.Entry<String, String> entry : updatedData.entrySet()) {
-            updateQuery.append(entry.getKey()).append(" = '").append(entry.getValue()).append("', ");
+            updateQuery.append(entry.getKey()).append(" = ");
+
+            // Check if the column is of type DATE
+            if (isDateColumn(selectedTableName, entry.getKey())) {
+                // Format the date as TO_DATE('user's inputed date', 'format')
+                updateQuery.append("TO_DATE('").append(entry.getValue()).append("', 'yyyy-MM-dd')");
+            } else {
+                // Non-date column, treat as string
+                updateQuery.append("'").append(entry.getValue()).append("'");
+            }
+
+            updateQuery.append(", ");
         }
 
         // Remove the trailing comma and space
@@ -273,6 +296,10 @@ public class myconnection {
 
             if (rowsUpdated > 0) {
                 System.out.println("Row updated successfully!");
+                if (callback != null) {
+                    callback.onSuccess();
+                }
+
             } else {
                 System.out.println("No rows were updated.");
             }
@@ -282,7 +309,26 @@ public class myconnection {
         }
     }
 
-    public static void performDeleteOperation(Map<String, String> rowData) {
+    public static boolean isDateColumn(String tableName, String columnName) {
+        // Query the database metadata to determine if the column is of type DATE
+        String query = "SELECT COLUMN_NAME, DATA_TYPE FROM ALL_TAB_COLUMNS WHERE TABLE_NAME = ? AND COLUMN_NAME = ?";
+        try (PreparedStatement preparedStatement = myconnection.cnx.prepareStatement(query)) {
+            preparedStatement.setString(1, tableName.toUpperCase());
+            preparedStatement.setString(2, columnName.toUpperCase());
+
+            ResultSet resultSet = preparedStatement.executeQuery();
+
+            if (resultSet.next()) {
+                String dataType = resultSet.getString("DATA_TYPE");
+                return dataType.equalsIgnoreCase("DATE");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+    public static void performDeleteOperation(Map<String, String> rowData, UpdateDeleteCallback callback) {
         String tableName = selectedTable;
 
         // Create the SQL DELETE statement
@@ -304,12 +350,16 @@ public class myconnection {
             Statement statement = myconnection.cnx.createStatement();
             statement.executeUpdate(deleteQuery.toString());
             System.out.println("Row deleted successfully!");
+            if (callback != null) {
+                callback.onSuccess();
+            }
+
         } catch (SQLException e) {
             e.printStackTrace();
             System.err.println("Error deleting row");
         }
-    }
 
+    }
 
     public static void closeResources() {
         try {

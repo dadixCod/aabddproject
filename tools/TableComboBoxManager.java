@@ -34,7 +34,7 @@ public class TableComboBoxManager {
         return FXCollections.observableArrayList(tableNames);
     }
 
-    private static List<String> queryUserTables1(String role) {
+    public static List<String> queryUserTables1(String role) {
         List<String> tableNames = new ArrayList<>();
 
         try {

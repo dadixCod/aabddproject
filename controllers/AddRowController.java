@@ -17,6 +17,8 @@ import java.util.ResourceBundle;
 import java.util.Set;
 import javafx.event.ActionEvent;
 import javafx.scene.Node;
+import javafx.stage.Stage;
+import static tools.myconnection.isDateColumn;
 
 public class AddRowController implements Initializable {
 
@@ -28,92 +30,119 @@ public class AddRowController implements Initializable {
     private Button insertButton;
 
     @Override
-public void initialize(URL url, ResourceBundle rb) {
-    
-    // Retrieve the selected table name from the global variable or pass it to this controller
-    String selectedTableName = FirstWindowController.selectedTable;
+    public void initialize(URL url, ResourceBundle rb) {
 
-    // Query the metadata of the selected table to get column names
-    ResultSet resultSet = myconnection.queryTableMetadata(selectedTableName);
+        // Retrieve the selected table name from the global variable or pass it to this controller
+        String selectedTableName = FirstWindowController.selectedTable;
 
-    Set<String> addedColumnNames = new HashSet<>();
-    try {
-        int textFieldCount = 0;
-        // Iterate through the result set to create TextFields for each column
-        while (resultSet.next()) {
-            String columnName = resultSet.getString("COLUMN_NAME");
+        // Query the metadata of the selected table to get column names
+        ResultSet resultSet = myconnection.queryTableMetadata(selectedTableName);
 
-            // Check if the column name is already added
-            if (!addedColumnNames.contains(columnName)) {
-                // Create a TextField for each column
-                TextField textField = new TextField();
-                textField.setPromptText(columnName); // Set column name as prompt text
+        Set<String> addedColumnNames = new HashSet<>();
+        try {
+            int textFieldCount = 0;
+            // Iterate through the result set to create TextFields for each column
+            while (resultSet.next()) {
+                String columnName = resultSet.getString("COLUMN_NAME");
 
-                // Set the position of the TextField (you may need to adjust this based on your layout)
-                textField.setLayoutX(10);
-                textField.setLayoutY(textFieldCount * 30 + 10);
+                // Check if the column name is already added
+                if (!addedColumnNames.contains(columnName)) {
+                    // Create a TextField for each column
+                    TextField textField = new TextField();
+                    textField.setPromptText(columnName); // Set column name as prompt text
 
-                // Add the TextField to the view
-                rootAnchorPane.getChildren().add(textField);
+                    // Set the position of the TextField (you may need to adjust this based on your layout)
+                    textField.setLayoutX(10);
+                    textField.setLayoutY(textFieldCount * 30 + 10);
 
-                textFieldCount++;
+                    // Add the TextField to the view
+                    rootAnchorPane.getChildren().add(textField);
 
-                // Add the column name to the set
-                addedColumnNames.add(columnName);
+                    textFieldCount++;
+
+                    // Add the column name to the set
+                    addedColumnNames.add(columnName);
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
+    @FXML
+    private void insertRow(ActionEvent event) {
+        // Retrieve the selected table name from the global variable or pass it to this controller
+        String selectedTableName = FirstWindowController.selectedTable;
+
+        // Create the SQL INSERT statement
+        StringBuilder insertQuery = new StringBuilder("INSERT INTO SYNM");
+        insertQuery.append(selectedTableName).append(" (");
+
+        // Gather the column names from TextFields
+        for (Node node : rootAnchorPane.getChildren()) {
+            if (node instanceof TextField) {
+                insertQuery.append(((TextField) node).getPromptText()).append(", ");
             }
         }
-    } catch (SQLException e) {
-        e.printStackTrace();
+
+        // Remove the trailing comma and space
+        if (insertQuery.length() > 2) {
+            insertQuery.setLength(insertQuery.length() - 2);
+        }
+
+        insertQuery.append(") VALUES (");
+
+        // Gather the values from TextFields
+        for (Node node : rootAnchorPane.getChildren()) {
+            if (node instanceof TextField) {
+                String columnName = ((TextField) node).getPromptText();
+                String columnValue = ((TextField) node).getText();
+
+                // Check if the column is of type DATE
+                if (isDateColumn(selectedTableName, columnName)) {
+                    // Format the date as TO_DATE('user's inputed date', 'format')
+                    insertQuery.append("TO_DATE('").append(columnValue).append("', 'yyyy-MM-dd')");
+                } else {
+                    // Non-date column, treat as string
+                    insertQuery.append("'").append(columnValue).append("'");
+                }
+
+                insertQuery.append(", ");
+            }
+        }
+
+        // Remove the trailing comma and space
+        if (insertQuery.length() > 2) {
+            insertQuery.setLength(insertQuery.length() - 2);
+        }
+
+        insertQuery.append(")");
+
+        // Execute the INSERT statement
+        executeUpdateQuery(insertQuery.toString());
     }
-}
+     private void executeUpdateQuery(String query) {
+        // Execute the INSERT or UPDATE statement
+        try {
+            Statement statement = myconnection.cnx.createStatement();
+            int rowsUpdated = statement.executeUpdate(query);
 
+            if (rowsUpdated > 0) {
+                System.out.println("Row updated/inserted successfully!");
+                // Close the current window/dialog
+                Stage stage = (Stage) rootAnchorPane.getScene().getWindow();
+                stage.close();
 
-   @FXML
-private void insertRow(ActionEvent event) {
-    // Retrieve the selected table name from the global variable or pass it to this controller
-    String selectedTableName = FirstWindowController.selectedTable;
-
-    // Create the SQL INSERT statement
-    StringBuilder insertQuery = new StringBuilder("INSERT INTO SYNM");
-    insertQuery.append(selectedTableName).append(" (");
-
-    // Gather the column names from TextFields
-    for (Node node : rootAnchorPane.getChildren()) {
-        if (node instanceof TextField) {
-            insertQuery.append(((TextField) node).getPromptText()).append(", ");
+                // Refresh the data in the parent window
+                FirstWindowController controller = new FirstWindowController();
+                controller.fillData();
+            } else {
+                System.out.println("No rows were updated/inserted.");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            System.err.println("Error updating/inserting row");
         }
     }
-
-    // Remove the trailing comma and space
-    if (insertQuery.length() > 2) {
-        insertQuery.setLength(insertQuery.length() - 2);
-    }
-
-    insertQuery.append(") VALUES (");
-
-    // Gather the values from TextFields
-    for (Node node : rootAnchorPane.getChildren()) {
-        if (node instanceof TextField) {
-            insertQuery.append("'").append(((TextField) node).getText()).append("', ");
-        }
-    }
-
-    // Remove the trailing comma and space
-    if (insertQuery.length() > 2) {
-        insertQuery.setLength(insertQuery.length() - 2);
-    }
-
-    insertQuery.append(")");
-
-    // Execute the INSERT statement
-    try {
-        Statement statement = myconnection.cnx.createStatement();
-        statement.executeUpdate(insertQuery.toString());
-        System.out.println("Row inserted successfully!");
-    } catch (SQLException e) {
-        e.printStackTrace();
-        System.err.println("Error inserting row");
-    }
-}
 
 }
